@@ -1,1 +1,81 @@
+import streamlit as st
+from sentence_transformers import SentenceTransformer
+from sklearn.metrics.pairwise import cosine_similarity
+import tiktoken
 
+st.set_page_config(page_title="Sentence Similarity App", layout="centered")
+
+st.title("Sentence Similarity & Token Inspector")
+st.write(
+    "Enter two statements below to inspect token counts via `tiktoken` "
+    "and compute their cosine similarity using `sentence-transformers`."
+)
+
+
+# Cache model loading so it doesn't reload on every interaction
+@st.cache_resource
+def load_model():
+    return SentenceTransformer("all-MiniLM-L6-v2")
+
+
+@st.cache_resource
+def load_tokenizer():
+    # cl100k_base is the standard encoding for GPT-3.5/GPT-4 text-embedding models
+    return tiktoken.get_encoding("cl100k_base")
+
+
+model = load_model()
+tokenizer = load_tokenizer()
+
+# User inputs
+statement_1 = st.text_area(
+    "Statement 1", placeholder="e.g., The weather is sunny and clear today."
+)
+statement_2 = st.text_area(
+    "Statement 2", placeholder="e.g., It is a bright and cloudless day outside."
+)
+
+if st.button("Compare Statements"):
+    # Input validation using if statements
+    if not statement_1.strip() and not statement_2.strip():
+        st.warning("Please provide input for both Statement 1 and Statement 2.")
+    elif not statement_1.strip():
+        st.warning("Statement 1 is empty. Please enter some text.")
+    elif not statement_2.strip():
+        st.warning("Statement 2 is empty. Please enter some text.")
+    else:
+        # Tokenization via tiktoken
+        tokens_1 = tokenizer.encode(statement_1)
+        tokens_2 = tokenizer.encode(statement_2)
+
+        # Generate embeddings via sentence-transformers
+        embedding_1 = model.encode([statement_1])
+        embedding_2 = model.encode([statement_2])
+
+        # Calculate cosine similarity
+        similarity = float(cosine_similarity(embedding_1, embedding_2)[0][0])
+
+        st.subheader("Results")
+
+        # Display token metrics
+        col1, col2 = st.columns(2)
+        with col1:
+            st.metric(label="Statement 1 Tokens", value=len(tokens_1))
+        with col2:
+            st.metric(label="Statement 2 Tokens", value=len(tokens_2))
+
+        # Display cosine similarity metric
+        st.metric(label="Cosine Similarity", value=f"{similarity:.4f}")
+
+        # Interpret similarity score using if-elif-else statements
+        if similarity >= 0.80:
+            st.success("High semantic similarity: Both sentences convey very similar meanings.")
+        elif similarity >= 0.50:
+            st.info("Moderate semantic similarity: The sentences share overlapping concepts or topics.")
+        else:
+            st.error("Low semantic similarity: The sentences have distinct or unrelated meanings.")
+
+        # Expandable inspection for token IDs
+        with st.expander("View Token IDs"):
+            st.write("**Statement 1 Token IDs:**", tokens_1)
+            st.write("**Statement 2 Token IDs:**", tokens_2)
